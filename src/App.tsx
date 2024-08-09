@@ -1,18 +1,7 @@
 
 import './styles/App.css'
-import { useEffect, useRef, useState } from 'react'
-import { OrbitControls, ImprovedNoise } from "three/addons";
+import { useEffect} from 'react'
 
-import {
-  Color,
-  Mesh,
-  MeshBasicMaterial,
-  PerspectiveCamera,
-  Scene,
-  WebGLRenderer, Vector3, BoxGeometry, MeshNormalMaterial, PlaneGeometry, Raycaster, Vector2, ConeGeometry, Camera, Clock, MathUtils,
-} from 'three';
-import { useFrame } from '@react-three/fiber';
-import { Loop } from './World/systems/Loop';
 import { createScene } from './World/components/scene';
 import { createRenderer } from './World/components/renderer';
 import { createCamera } from './World/components/camera';

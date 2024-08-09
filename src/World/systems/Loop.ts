@@ -27,7 +27,6 @@ export class Loop {
     tick() {
         // 每帧只调用一次getDelta函数
         const delta = this.clock.getDelta();
-        // todo 计算每个对象的tick
         
         if (this.updatables.length < 1) return
         for (const object of this.updatables) {
