@@ -1,7 +1,9 @@
-import { BoxGeometry, Camera, Color, MathUtils, Mesh, MeshNormalMaterial, PerspectiveCamera, PlaneGeometry, Raycaster, Scene, Vector2, Vector3, WebGLRenderer } from "three";
-import { OrbitControls, ImprovedNoise } from "three/addons";
+import { AnimationMixer, BoxGeometry, Camera, Color, DirectionalLight, MathUtils, Mesh, MeshNormalMaterial, PerspectiveCamera, PlaneGeometry, Raycaster, Scene, Vector2, Vector3, WebGLRenderer } from "three";
+import { OrbitControls, ImprovedNoise, FBXLoader, } from "three/addons";
 import { Loop } from "./systems/Loop";
 import { Resizer } from "./systems/Resize";
+import { createStats } from "./components/stats";
+
 
 export class World {
 
@@ -25,6 +27,9 @@ export class World {
     worldHalfWidth = this.worldWidth / 2
     worldHalfDepth = this.worldDepth / 2;
 
+    stats = createStats();
+    
+
     constructor(container: HTMLElement, camera: PerspectiveCamera, scene: Scene, renderer: WebGLRenderer) {
 
         this.container = container
@@ -43,7 +48,7 @@ export class World {
 
         this.init()
         const resizer = new Resizer(container, camera, renderer, () => {
-            
+
         });
     }
 
@@ -52,10 +57,9 @@ export class World {
     init() {
 
         console.log("init");
-        
 
         // 每个对象最初都是在(0,0,0)处创建的,让摄像机向后移动来查看场景
-        this.camera.position.set(0, 0, 10);
+        this.camera.position.set(0, 0, 50);
 
         const terrain = this.planeMesh();
         const boxMashObj = this.boxMesh(new Vector3(2, 2, 2));
@@ -63,9 +67,18 @@ export class World {
         this.scene.add(boxMashObj);
         boxMashObj.position.set(0, 0, 0);
 
+        terrain.position.set(0, 0, 0);
+        terrain.rotation.x = -Math.PI / 2;
+        this.scene.add(terrain);
+
         // 将度数转换为弧度
         const radiansPerSecond = MathUtils.degToRad(30);
 
+        this.loop.updatables.push({
+            tick: ((delta: number) => {
+                this.stats.update()
+            })
+        })
 
         this.loop.updatables.push({
             mash: boxMashObj,
@@ -74,11 +87,19 @@ export class World {
             })
         });
 
+        const directionalLight = new DirectionalLight(0xffffff, 8);
+        directionalLight.position.set(10, 10, 10);
+        this.scene.add(directionalLight);
+
+
+
         this.loop.start()
         this.controls()
         // 监听鼠标移动
         this.container.addEventListener('pointermove', this.onPointerMove);
 
+        
+        
     }
 
     // 相机控制
@@ -142,7 +163,7 @@ export class World {
     }
 
     planeMesh = () => {
-        const geometry = new PlaneGeometry(450, 450, this.worldWidth - 1, this.worldDepth - 1);
+        const geometry = new PlaneGeometry(50, 50, this.worldWidth - 1, this.worldDepth - 1);
         const material = new MeshNormalMaterial();
         return new Mesh(geometry, material);
     }
