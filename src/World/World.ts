@@ -1,4 +1,4 @@
-import { AnimationMixer, BoxGeometry, Camera, Color, DirectionalLight, MathUtils, Mesh, MeshNormalMaterial, PerspectiveCamera, PlaneGeometry, Raycaster, Scene, Vector2, Vector3, WebGLRenderer } from "three";
+import { AnimationMixer, BoxGeometry, Camera, CanvasTexture, ClampToEdgeWrapping, Color, DirectionalLight, DoubleSide, MathUtils, Mesh, MeshLambertMaterial, MeshNormalMaterial, PerspectiveCamera, PlaneGeometry, Raycaster, SRGBColorSpace, Scene, Vector2, Vector3, WebGLRenderer } from "three";
 import { OrbitControls, ImprovedNoise, FBXLoader, } from "three/addons";
 import { Loop } from "./systems/Loop";
 import { Resizer } from "./systems/Resize";
@@ -28,7 +28,7 @@ export class World {
     worldHalfDepth = this.worldDepth / 2;
 
     stats = createStats();
-    
+
 
     constructor(container: HTMLElement, camera: PerspectiveCamera, scene: Scene, renderer: WebGLRenderer) {
 
@@ -61,25 +61,20 @@ export class World {
         // 每个对象最初都是在(0,0,0)处创建的,让摄像机向后移动来查看场景
         this.camera.position.set(0, 0, 50);
 
-        const terrain = this.planeMesh();
         const boxMashObj = this.boxMesh(new Vector3(2, 2, 2));
-
         this.scene.add(boxMashObj);
         boxMashObj.position.set(0, 0, 0);
 
-        terrain.position.set(0, 0, 0);
-        terrain.rotation.x = -Math.PI / 2;
-        this.scene.add(terrain);
+
+
 
         // 将度数转换为弧度
         const radiansPerSecond = MathUtils.degToRad(30);
-
         this.loop.updatables.push({
             tick: ((delta: number) => {
                 this.stats.update()
             })
         })
-
         this.loop.updatables.push({
             mash: boxMashObj,
             tick: ((delta: number) => {
@@ -87,6 +82,7 @@ export class World {
             })
         });
 
+        // 环境光
         const directionalLight = new DirectionalLight(0xffffff, 8);
         directionalLight.position.set(10, 10, 10);
         this.scene.add(directionalLight);
@@ -98,8 +94,8 @@ export class World {
         // 监听鼠标移动
         this.container.addEventListener('pointermove', this.onPointerMove);
 
-        
-        
+        this.generateTerrain()
+
     }
 
     // 相机控制
@@ -128,29 +124,136 @@ export class World {
         //看看从摄像机进入世界的光线是否击中了我们的一个网格
         // const intersects = raycaster.intersectObject(boxMashObj);
     }
+    // 地形生成
+    generateTerrain() {
+        // 地形
+        const terrain = this.terrainMesh(7000, 7000);
+
+        terrain.position.set(0, 0, 0);
+        terrain.rotation.x = -Math.PI / 2;
+
+        const generateData = this.generateHeight(this.worldWidth, this.worldDepth);
+        const data = generateData
+
+        const vertices = terrain.geometry.attributes.position.array;
+        // 改变顶点高度值
+        for (var i = 0, j = 0, l = vertices.length; i < l; i++, j += 3) {
+            // 缩放噪声的影响，使得高度值更适中，避免过高的突起或者过低的凹陷
+            const scalingEffect = 10
+            vertices[j + 2] = data[i] * scalingEffect;
+        }
+        terrain.geometry.computeVertexNormals();
+
+        // 生成纹理
+        const texture = new CanvasTexture(this.generateTexture(data, this.worldWidth, this.worldDepth));
+        texture.wrapS = ClampToEdgeWrapping;
+        texture.wrapT = ClampToEdgeWrapping;
+        texture.colorSpace = SRGBColorSpace;
+        terrain.material = new MeshLambertMaterial({ map: texture });
+
+        this.scene.add(terrain);
+
+    }
 
     // 生成高度
     generateHeight(width: number, height: number) {
 
-        const size = width * height, data = new Uint8Array(size),
-            perlin = new ImprovedNoise(), z = Math.random() * 100;
+        const size = width * height
+        const data = new Uint8Array(size)
+        const perlin = new ImprovedNoise()
 
+        // 随机数
+        const z = Math.random() * 100;
+
+        // 控制地面显示效果
         let quality = 1;
 
         for (let j = 0; j < 4; j++) {
 
             for (let i = 0; i < size; i++) {
 
-                const x = i % width, y = ~ ~(i / width);
-                data[i] += Math.abs(perlin.noise(x / quality, y / quality, z) * quality * 1.75);
-
+                const x = i % width
+                const y = ~ ~(i / width); // 按位取反两次，取整
+                // 调整生成的噪声图的振幅 1.75 -> 1.2
+                const swing = 1.4
+                // 去除边缘
+                if (x != 0 && y != 0 && x != width - 1 && y != height - 1) {
+                    data[i] += Math.abs(perlin.noise(x / quality, y / quality, z) * quality * swing);
+                }
             }
 
-            quality *= 5;
+            // quality的倍数
+            quality *= 5.5;
 
         }
 
         return data;
+
+    }
+    generateTexture(data: Uint8Array, width: number, height: number) {
+        // 将灯光烘焙成纹理
+
+        let image, imageData, shade;
+
+        const vector3 = new Vector3(0, 0, 0);
+
+        const sun = new Vector3(1, 1, 1);
+        sun.normalize();
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+
+        let context = canvas.getContext('2d');
+        context!.fillStyle = '#000';
+        context!.fillRect(0, 0, width, height);
+
+        image = context!.getImageData(0, 0, canvas.width, canvas.height);
+        imageData = image.data;
+
+        for (let i = 0, j = 0, l = imageData.length; i < l; i += 4, j++) {
+
+            vector3.x = data[j - 2] - data[j + 2];
+            vector3.y = 2;
+            vector3.z = data[j - width * 2] - data[j + width * 2];
+            vector3.normalize();
+
+            shade = vector3.dot(sun);
+
+            imageData[i] = (96 + shade * 128) * (0.5 + data[j] * 0.007);
+            imageData[i + 1] = (32 + shade * 96) * (0.5 + data[j] * 0.007);
+            imageData[i + 2] = (shade * 96) * (0.5 + data[j] * 0.007);
+
+        }
+
+        context!.putImageData(image, 0, 0);
+
+        // Scaled 4x
+
+        const canvasScaled = document.createElement('canvas');
+        canvasScaled.width = width * 4;
+        canvasScaled.height = height * 4;
+
+        context = canvasScaled.getContext('2d');
+        context!.scale(4, 4);
+        context!.drawImage(canvas, 0, 0);
+
+        image = context!.getImageData(0, 0, canvasScaled.width, canvasScaled.height);
+        imageData = image.data;
+
+        for (let i = 0, l = imageData.length; i < l; i += 4) {
+
+            const v = ~ ~(Math.random() * 5);
+
+            imageData[i] += v;
+            imageData[i + 1] += v;
+            imageData[i + 2] += v;
+
+        }
+
+        context!.putImageData(image, 0, 0);
+
+        return canvasScaled;
 
     }
 
@@ -162,9 +265,31 @@ export class World {
         return new Mesh(geometry, material);
     }
 
-    planeMesh = () => {
-        const geometry = new PlaneGeometry(50, 50, this.worldWidth - 1, this.worldDepth - 1);
-        const material = new MeshNormalMaterial();
+    terrainMesh = (width: number, hieght: number) => {
+        const geometry = new PlaneGeometry(width, hieght, this.worldWidth - 1, this.worldDepth - 1);
+        // const material = new MeshNormalMaterial();
+        const material = new MeshLambertMaterial({
+            color: 0xCAA066,
+            side: DoubleSide,
+        });
+
+
         return new Mesh(geometry, material);
     }
 }
+
+/**
+左上角为原点，向右为x，向下为y
+0,0
+——————————————————————————y
+|
+|
+|
+|
+|
+|
+|
+|
+x
+
+ */
