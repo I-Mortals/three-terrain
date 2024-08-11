@@ -3,6 +3,7 @@ import { OrbitControls, ImprovedNoise, FBXLoader, } from "three/addons";
 import { Loop } from "./systems/Loop";
 import { Resizer } from "./systems/Resize";
 import { createStats } from "./components/stats";
+import { adjustColor } from "./tools";
 
 
 export class World {
@@ -28,6 +29,8 @@ export class World {
     worldHalfDepth = this.worldDepth / 2;
 
     stats = createStats();
+
+    directionalLight = new DirectionalLight(0xffffff, 1);
 
 
     constructor(container: HTMLElement, camera: PerspectiveCamera, scene: Scene, renderer: WebGLRenderer) {
@@ -83,9 +86,9 @@ export class World {
         });
 
         // 环境光
-        const directionalLight = new DirectionalLight(0xffffff, 8);
-        directionalLight.position.set(10, 10, 10);
-        this.scene.add(directionalLight);
+        this.directionalLight = new DirectionalLight(0xffffff, 8);
+        this.directionalLight.position.set(10, 10, 10);
+        this.scene.add(this.directionalLight);
 
 
 
@@ -134,8 +137,9 @@ export class World {
 
         const generateData = this.generateHeight(this.worldWidth, this.worldDepth);
         const data = generateData
-
+        // 顶点位置坐标数据
         const vertices = terrain.geometry.attributes.position.array;
+
         // 改变顶点高度值
         for (var i = 0, j = 0, l = vertices.length; i < l; i++, j += 3) {
             // 缩放噪声的影响，使得高度值更适中，避免过高的突起或者过低的凹陷
@@ -190,45 +194,81 @@ export class World {
         return data;
 
     }
+
+    // 将生成的高度数据转换为纹理
     generateTexture(data: Uint8Array, width: number, height: number) {
-        // 将灯光烘焙成纹理
 
         let image, imageData, shade;
 
         const vector3 = new Vector3(0, 0, 0);
 
+        // 光照向量并归一化
         const sun = new Vector3(1, 1, 1);
+        sun.copy(this.directionalLight.position)
         sun.normalize();
 
+        // 创建画布
         const canvas = document.createElement('canvas');
+        canvas.style.position = 'absolute';
+        canvas.style.top = '0';
+        canvas.style.right = '0';
+        document.body.appendChild(canvas);
         canvas.width = width;
         canvas.height = height;
 
+        // 绘制矩形黑色
         let context = canvas.getContext('2d');
         context!.fillStyle = '#000';
         context!.fillRect(0, 0, width, height);
 
         image = context!.getImageData(0, 0, canvas.width, canvas.height);
+        // 获取画布RGBA的1维数组，0~255
         imageData = image.data;
 
         for (let i = 0, j = 0, l = imageData.length; i < l; i += 4, j++) {
+            // imageData [0,0,0,255, 0,0,0,255, ...]
 
+            // 计算光照的梯度，前两个点和后两个点的颜色差
             vector3.x = data[j - 2] - data[j + 2];
             vector3.y = 2;
-            vector3.z = data[j - width * 2] - data[j + width * 2];
+            vector3.z = data[j - width] - data[j + width];
+
             vector3.normalize();
 
-            shade = vector3.dot(sun);
+            // 阴影浓度控制
+            const shadowIntensity = 0.3
+            // 阳光与背阴影,用计算得到的光照梯度与阳光的点积结果
+            shade = sun.dot(vector3) < 0 ? shadowIntensity : sun.dot(vector3)
 
-            imageData[i] = (96 + shade * 128) * (0.5 + data[j] * 0.007);
-            imageData[i + 1] = (32 + shade * 96) * (0.5 + data[j] * 0.007);
-            imageData[i + 2] = (shade * 96) * (0.5 + data[j] * 0.007);
+
+            // 平均高度
+            const heightAvg = 0.5
+            // 控制噪声对颜色值的影响
+            const factor = 2
+
+            if (data[j] < (height / 7.5) * heightAvg) {
+                imageData[i] = adjustColor(220 * shade, data[j], factor)
+                imageData[i + 1] = adjustColor(190 * shade, data[j], factor)
+                imageData[i + 2] = adjustColor(140 * shade, data[j], factor)
+            } else if (data[j] < (height / 3) * heightAvg) {
+                imageData[i] = adjustColor(10 * shade, data[j], factor)
+                imageData[i + 1] = adjustColor(200 * shade, data[j], factor)
+                imageData[i + 2] = adjustColor(96 * shade, data[j], factor)
+            } else if (data[j] < (height / 2) * heightAvg) {
+                imageData[i] = adjustColor(215 * shade, data[j], factor)
+                imageData[i + 1] = adjustColor(120 * shade, data[j], factor)
+                imageData[i + 2] = adjustColor(80 * shade, data[j], factor)
+            } else {
+                imageData[i] = adjustColor(200 * shade, data[j], factor)
+                imageData[i + 1] = adjustColor(200 * shade, data[j], factor)
+                imageData[i + 2] = adjustColor(200 * shade, data[j], factor)
+            }
 
         }
-
+        // 将调整过的RGBA数据内容绘制到canvas
         context!.putImageData(image, 0, 0);
 
-        // Scaled 4x
+        // 放大4x
 
         const canvasScaled = document.createElement('canvas');
         canvasScaled.width = width * 4;
@@ -236,22 +276,8 @@ export class World {
 
         context = canvasScaled.getContext('2d');
         context!.scale(4, 4);
+        // 将画布内容绘制到canvasScaled
         context!.drawImage(canvas, 0, 0);
-
-        image = context!.getImageData(0, 0, canvasScaled.width, canvasScaled.height);
-        imageData = image.data;
-
-        for (let i = 0, l = imageData.length; i < l; i += 4) {
-
-            const v = ~ ~(Math.random() * 5);
-
-            imageData[i] += v;
-            imageData[i + 1] += v;
-            imageData[i + 2] += v;
-
-        }
-
-        context!.putImageData(image, 0, 0);
 
         return canvasScaled;
 
@@ -277,6 +303,8 @@ export class World {
         return new Mesh(geometry, material);
     }
 }
+
+
 
 /**
 左上角为原点，向右为x，向下为y
