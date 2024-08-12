@@ -1,9 +1,11 @@
 import { AnimationMixer, BoxGeometry, Camera, CanvasTexture, ClampToEdgeWrapping, Color, DirectionalLight, DoubleSide, MathUtils, Mesh, MeshLambertMaterial, MeshNormalMaterial, PerspectiveCamera, PlaneGeometry, Raycaster, SRGBColorSpace, Scene, Vector2, Vector3, WebGLRenderer } from "three";
-import { OrbitControls, ImprovedNoise, FBXLoader, } from "three/addons";
+import { OrbitControls, ImprovedNoise, FBXLoader, Sky, } from "three/addons";
 import { Loop } from "./systems/Loop";
 import { Resizer } from "./systems/Resize";
 import { createStats } from "./components/stats";
 import { adjustColor } from "./tools";
+import { Player } from './Player/Player';
+import { WaterSystem } from "./Water";
 
 
 export class World {
@@ -90,6 +92,35 @@ export class World {
         this.directionalLight.position.set(10, 10, 10);
         this.scene.add(this.directionalLight);
 
+        
+        // 天空
+        const sky = new Sky();
+        sky.scale.setScalar(70000); // 天空盒的大小
+        this.scene.add(sky);
+        const skyUniforms = sky.material.uniforms
+skyUniforms[ 'turbidity' ].value = 10;
+skyUniforms[ 'rayleigh' ].value = 2;
+skyUniforms[ 'mieCoefficient' ].value = 0.005;
+skyUniforms[ 'mieDirectionalG' ].value = 0.8;
+
+
+        // 水面
+        const waterSystem = new WaterSystem(this.directionalLight,this.renderer)
+        this.scene.add(waterSystem.getWater())
+        waterSystem.water.rotation.x = -Math.PI / 2
+        waterSystem.water.position.y = 250
+        this.loop.updatables.push({
+            water: waterSystem.getWater(),
+            tick: ((delta: number) => {
+                waterSystem.getWater().material.uniforms.time.value += 1.0 / 60.0;
+                waterSystem.updateSun(this.directionalLight.position,this.scene,sky)
+            })
+        })
+
+
+
+
+        new Player(this.loop,this.scene)
 
 
         this.loop.start()
