@@ -22,7 +22,7 @@ export class Player {
                 model: model,
                 tick: ((delta: number) => {
                     if (mixer) {
-                        mixer.update(delta); // 更新动画
+                        // mixer.update(delta); // 更新动画
                     }
                 })
             })

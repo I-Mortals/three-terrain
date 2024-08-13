@@ -21,6 +21,7 @@ renderTarget:WebGLRenderTarget<Texture>|undefined = undefined;
             sunDirection: directionalLight.position, // 阳光方向
             sunColor: directionalLight.color, // 阳光颜色
             waterColor: 0x001e0f, // 水面颜色
+            side: 0, // 两面渲染
             distortionScale: 3.7, // 扭曲程度
             fog: false // 是否开启雾化
         })
@@ -46,7 +47,7 @@ PMREMGenerator 是 Three.js 物体材质中用于实现基于物理的渲染（P
           const phi = MathUtils.degToRad( 90 - this.parameters.elevation );
           const theta = MathUtils.degToRad( this.parameters.azimuth );
         // 计算太阳位置
-          sun.setFromSphericalCoords( 1, phi, theta );
+          sun.setFromSphericalCoords( 1, phi, theta ); // 1 是太阳半径, phi 是太阳方位角，theta 是太阳俯仰角
         // 将太阳位置应用到天空和水面
           sky.material.uniforms[ 'sunPosition' ].value.copy( sun );
           this.water.material.uniforms[ 'sunDirection' ].value.copy( sun ).normalize();

@@ -1,4 +1,4 @@
-import { AnimationMixer, BoxGeometry, Camera, CanvasTexture, ClampToEdgeWrapping, Color, DirectionalLight, DoubleSide, MathUtils, Mesh, MeshLambertMaterial, MeshNormalMaterial, PerspectiveCamera, PlaneGeometry, Raycaster, SRGBColorSpace, Scene, Vector2, Vector3, WebGLRenderer } from "three";
+import { AnimationMixer, BoxGeometry, Camera, CanvasTexture, ClampToEdgeWrapping, Color, DirectionalLight, DoubleSide, MathUtils, Mesh, MeshBasicMaterial, MeshDistanceMaterial, MeshLambertMaterial, MeshMatcapMaterial, MeshNormalMaterial, MeshPhongMaterial, MeshPhysicalMaterial, MeshStandardMaterial, PMREMGenerator, PerspectiveCamera, PlaneGeometry, Raycaster, SRGBColorSpace, Scene, Vector2, Vector3, WebGLRenderer } from "three";
 import { OrbitControls, ImprovedNoise, FBXLoader, Sky, } from "three/addons";
 import { Loop } from "./systems/Loop";
 import { Resizer } from "./systems/Resize";
@@ -88,39 +88,55 @@ export class World {
         });
 
         // 环境光
-        this.directionalLight = new DirectionalLight(0xffffff, 8);
+        this.directionalLight = new DirectionalLight(0xffffff, 2);
         this.directionalLight.position.set(10, 10, 10);
+        this.directionalLight
         this.scene.add(this.directionalLight);
 
-        
+
         // 天空
         const sky = new Sky();
-        sky.scale.setScalar(70000); // 天空盒的大小
-        this.scene.add(sky);
-        const skyUniforms = sky.material.uniforms
-skyUniforms[ 'turbidity' ].value = 10;
-skyUniforms[ 'rayleigh' ].value = 2;
-skyUniforms[ 'mieCoefficient' ].value = 0.005;
-skyUniforms[ 'mieDirectionalG' ].value = 0.8;
+        sky.scale.setScalar(10000); // 天空盒的大小
+        const parameters = {
+            elevation: 1,
+            azimuth: 180
+        };
+        //Env
+        const pmremGenerator = new PMREMGenerator(this.renderer);
 
+
+        this.scene.add(sky);
+        this.scene.environment = pmremGenerator.fromScene(this.scene).texture;
+        
+        const skyUniforms = sky.material.uniforms
+        skyUniforms['turbidity'].value = 10; // 天空盒的亮度
+        skyUniforms['rayleigh'].value = 2; // 天空盒的反射率
+        skyUniforms['mieCoefficient'].value = 0.005; // 大气层的反射率
+        skyUniforms['mieDirectionalG'].value = 0.8; // 大气层的方向
+        const phi = MathUtils.degToRad( 90 - parameters.elevation ); 
+        const theta = MathUtils.degToRad( parameters.azimuth );
+        this.directionalLight.position.setFromSphericalCoords( 1, phi, theta ) // 设置从球面坐标
+        sky.material.uniforms[ 'sunPosition' ].value.copy( this.directionalLight.position );
 
         // 水面
-        const waterSystem = new WaterSystem(this.directionalLight,this.renderer)
+        const waterSystem = new WaterSystem(this.directionalLight, this.renderer)
         this.scene.add(waterSystem.getWater())
         waterSystem.water.rotation.x = -Math.PI / 2
         waterSystem.water.position.y = 250
+
+        // waterSystem.updateSun(this.directionalLight.position, this.scene, sky)
+
         this.loop.updatables.push({
             water: waterSystem.getWater(),
             tick: ((delta: number) => {
                 waterSystem.getWater().material.uniforms.time.value += 1.0 / 60.0;
-                waterSystem.updateSun(this.directionalLight.position,this.scene,sky)
             })
         })
 
 
 
 
-        new Player(this.loop,this.scene)
+        new Player(this.loop, this.scene)
 
 
         this.loop.start()
@@ -139,7 +155,7 @@ skyUniforms[ 'mieDirectionalG' ].value = 0.8;
         controls.minDistance = 0;
         controls.maxDistance = 10000;
         controls.maxPolarAngle = Math.PI / 2;
-        this.camera.position.y = controls.target.y + 10;
+        this.camera.position.y = controls.target.y + 10000;
         // this.camera.position.x = 10;
         controls.update();
     }
@@ -184,7 +200,14 @@ skyUniforms[ 'mieDirectionalG' ].value = 0.8;
         texture.wrapS = ClampToEdgeWrapping;
         texture.wrapT = ClampToEdgeWrapping;
         texture.colorSpace = SRGBColorSpace;
-        terrain.material = new MeshLambertMaterial({ map: texture });
+        terrain.material = new MeshStandardMaterial({ 
+            envMap: texture, 
+            map: texture, 
+            roughness: 0.44,
+            lightMapIntensity: 0.5,
+            lightMap: texture
+        });
+        // terrain.material = new MeshLambertMaterial({ map: texture });
 
         this.scene.add(terrain);
 
@@ -267,9 +290,10 @@ skyUniforms[ 'mieDirectionalG' ].value = 0.8;
             vector3.normalize();
 
             // 阴影浓度控制
-            const shadowIntensity = 0.3
+            const shadowIntensity = 0.4
             // 阳光与背阴影,用计算得到的光照梯度与阳光的点积结果
-            shade = sun.dot(vector3) < 0 ? shadowIntensity : sun.dot(vector3)
+            shade =1
+            // shade = sun.dot(vector3) < 0 ? shadowIntensity : Math.max(shadowIntensity, sun.dot(vector3));
 
 
             // 平均高度
@@ -318,16 +342,14 @@ skyUniforms[ 'mieDirectionalG' ].value = 0.8;
     // mesh
     boxMesh = (size: Vector3) => {
         const geometry = new BoxGeometry(size.x, size.y, size.z);
-        const material = new MeshNormalMaterial();
+        const material = new MeshStandardMaterial();
         return new Mesh(geometry, material);
     }
 
     terrainMesh = (width: number, hieght: number) => {
         const geometry = new PlaneGeometry(width, hieght, this.worldWidth - 1, this.worldDepth - 1);
         // const material = new MeshNormalMaterial();
-        const material = new MeshLambertMaterial({
-            color: 0xCAA066,
-            side: DoubleSide,
+        const material = new MeshStandardMaterial({
         });
 
 
