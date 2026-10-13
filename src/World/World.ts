@@ -1,5 +1,5 @@
-import { AnimationMixer, BoxGeometry, Camera, CanvasTexture, ClampToEdgeWrapping, Color, DirectionalLight, DoubleSide, MathUtils, Mesh, MeshBasicMaterial, MeshDistanceMaterial, MeshLambertMaterial, MeshMatcapMaterial, MeshNormalMaterial, MeshPhongMaterial, MeshPhysicalMaterial, MeshStandardMaterial, PMREMGenerator, PerspectiveCamera, PlaneGeometry, Raycaster, SRGBColorSpace, Scene, Vector2, Vector3, WebGLRenderer } from "three";
-import { OrbitControls, ImprovedNoise, FBXLoader, Sky, } from "three/addons";
+import { BoxGeometry, CanvasTexture, ClampToEdgeWrapping, DirectionalLight, MathUtils, Mesh, MeshStandardMaterial, PMREMGenerator, PerspectiveCamera, PlaneGeometry, Raycaster, SRGBColorSpace, Scene, Vector2, Vector3, WebGLRenderer } from "three";
+import { OrbitControls, ImprovedNoise, Sky, } from "three/addons";
 import { Loop } from "./systems/Loop";
 import { Resizer } from "./systems/Resize";
 import { createStats } from "./components/stats";
@@ -52,7 +52,7 @@ export class World {
         }
 
         this.init()
-        const resizer = new Resizer(container, camera, renderer, () => {
+        new Resizer(container, camera, renderer, () => {
 
         });
     }
@@ -76,7 +76,7 @@ export class World {
         // 将度数转换为弧度
         const radiansPerSecond = MathUtils.degToRad(30);
         this.loop.updatables.push({
-            tick: ((delta: number) => {
+            tick: (() => {
                 this.stats.update()
             })
         })
@@ -128,7 +128,7 @@ export class World {
 
         this.loop.updatables.push({
             water: waterSystem.getWater(),
-            tick: ((delta: number) => {
+            tick: (() => {
                 waterSystem.getWater().material.uniforms.time.value += 1.0 / 60.0;
             })
         })
@@ -290,7 +290,7 @@ export class World {
             vector3.normalize();
 
             // 阴影浓度控制
-            const shadowIntensity = 0.4
+            // const shadowIntensity = 0.4
             // 阳光与背阴影,用计算得到的光照梯度与阳光的点积结果
             shade =1
             // shade = sun.dot(vector3) < 0 ? shadowIntensity : Math.max(shadowIntensity, sun.dot(vector3));

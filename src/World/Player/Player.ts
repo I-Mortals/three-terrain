@@ -20,7 +20,7 @@ export class Player {
 
             loop.updatables.push({
                 model: model,
-                tick: ((delta: number) => {
+                tick: (() => {
                     if (mixer) {
                         // mixer.update(delta); // 更新动画
                     }
